@@ -103,9 +103,10 @@ class Storm(object):
     """
     Main function to generate helical symmetry
     """
-    def __init__(self, storm_file, cluster_distance):
+    def __init__(self, storm_file, cluster_distance, min_sample):
         self.storm_file = open(storm_file)
         self.cluster_distance = cluster_distance
+	self.min_sample = min_sample
         self.minX = 10000
 	self.minY = 10000
 	self.frame_xy = {}
@@ -170,10 +171,14 @@ class Storm(object):
 
     def cluster_dbscan(self):
 	print "Starting DBSCAN"
-	db = DBSCAN(eps=self.cluster_distance, min_samples=10)
+	db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample)
 	#db.fit(self.all_frames_xy)
 	X = StandardScaler().fit_transform(self.all_frames_xy)
 	clusters = db.fit_predict(X)
+	labels = db.labels_
+	# Number of clusters in labels, ignoring noise if present.
+	n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+	print('Estimated number of clusters: %d' % n_clusters_)
         return clusters
 
 
@@ -254,7 +259,7 @@ class Storm(object):
 	res_count = 1 
 	for cluster in cluster_dict.keys():
 	    write_lines.append("MODEL "+str(cluster+1)+"\n")
-	    if cluster>0:
+	    if cluster>=0:
 		out_file_cmd.write("molmap #0."+str(cluster+1)+" 150\n")
                 out_file_cmd.write("volume #0."+str(cluster+1)+" transparency 0.3\n")
 		#if len(cluster_dict[cluster]) > 100:
@@ -318,9 +323,13 @@ if '__main__' == __name__:
     parser.add_option("-d", "--distance", dest="cluster_distance", default =None,
                       type = 'float',
                       help="Clutering distance.  Default =  2sigma")
+    parser.add_option("-m", "--min", dest="min_sample", default =None,
+		      type = 'int',
+		      help="Minimum sample size.  Default =  None")
+
 
     options, args = parser.parse_args()
-    storm = Storm(options.storm_file, options.cluster_distance)
+    storm = Storm(options.storm_file, options.cluster_distance, options.min_sample)
     clusters = storm.cluster_dbscan()
     print clusters
     #First iteration
