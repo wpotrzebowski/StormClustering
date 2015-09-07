@@ -1,0 +1,3 @@
+python storm_clustering.py -f data/scarce_01_detections.csv -d 0.4 -m 8
+python storm_clustering.py -f data/scarce_02_detections.csv -d 0.4 -m 8
+python storm_clustering.py -f data/scarce_03_detections.csv -d 0.4 -m 8
