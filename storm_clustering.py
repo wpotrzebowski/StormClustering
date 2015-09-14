@@ -13,7 +13,8 @@ import os
 from numpy import array
 from numpy import arange
 from numpy.linalg import norm
-from numpy import sqrt
+from numpy import zeros_like
+from numpy import linspace
 #BioPython import
 from Bio.KDTree import KDTree
 #Birch 
@@ -21,7 +22,8 @@ from sklearn.cluster import Birch
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
-
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider, Button, RadioButtons
 
 class Storm(object):
 	"""
@@ -95,14 +97,12 @@ class Storm(object):
 
 	def cluster_dbscan(self):
 		print "Starting DBSCAN"
-		db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample)
 		#db.fit(self.all_frames_xy)
 		X = StandardScaler().fit_transform(self.all_frames_xy)
+		db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample).fit(X)
+		self.__show_plot(db,X)
 		clusters = db.fit_predict(X)
-		labels = db.labels_
-		# Number of clusters in labels, ignoring noise if present.
-		n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-		print('Estimated number of clusters: %d' % n_clusters_)
+
 		return clusters
 
 
@@ -172,6 +172,38 @@ class Storm(object):
 		out_file.writelines(write_lines)
 		out_file.close()
 		out_file_cmd.close()
+
+	def __show_plot(self, db, X):
+		core_samples_mask = zeros_like(db.labels_, dtype=bool)
+		core_samples_mask[db.core_sample_indices_] = True
+		labels = db.labels_
+		n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+		# Black removed and is used for noise instead.
+		unique_labels = set(labels)
+		colors = plt.cm.Spectral(linspace(0, 1, len(unique_labels)))
+		for k, col in zip(unique_labels, colors):
+			if k == -1:
+				col = 'k'
+
+			class_member_mask = (labels == k)
+			xy = X[class_member_mask & core_samples_mask]
+			plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,markeredgecolor='k', markersize=14)
+
+			xy = X[class_member_mask & ~core_samples_mask]
+			plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,markeredgecolor='k', markersize=6)
+
+		plt.title('Estimated number of clusters: %d' % n_clusters_)
+
+		axcolor = 'lightgoldenrodyellow'
+		axfreq = plt.axes([0.2, 0.0, 0.65, 0.03], axisbg=axcolor)
+		axamp  = plt.axes([0.2, 0.05, 0.65, 0.03], axisbg=axcolor)
+
+		a0 = 24
+		f0 = 0.5
+		sfreq = Slider(axfreq, 'Max distance to neighbor', 0.0, 1.0, valinit=f0)
+		samp = Slider(axamp, 'Minimum Cluster Size', 1, 60, valinit=a0)
+
+		plt.show()
 
 if '__main__' == __name__:
 	doc = """
