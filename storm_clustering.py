@@ -40,6 +40,11 @@ class Storm(object):
 		self.clustered_dict = {}
 		self.KDPointsXY = []
 		self.ns = None
+		self.sfreq = None
+		self.samp = None
+		self.fig, self.ax = plt.subplots()
+		plt.subplots_adjust(left=0.25, bottom=0.25)
+
 		#self.__read_data_birch()
 		self.__read_synthetic_data()
 
@@ -100,10 +105,9 @@ class Storm(object):
 		#db.fit(self.all_frames_xy)
 		X = StandardScaler().fit_transform(self.all_frames_xy)
 		db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample).fit(X)
-		self.__show_plot(db,X)
 		clusters = db.fit_predict(X)
 
-		return clusters
+		return clusters, db, X
 
 
 	def save_to_pdb_birch(self, pdb_name, clusters):
@@ -173,7 +177,16 @@ class Storm(object):
 		out_file.close()
 		out_file_cmd.close()
 
-	def __show_plot(self, db, X):
+	def __update_plot(self, val):
+		self.cluster_distance = round(self.samp.val)
+		self.min_sample = self.sfreq.val
+		self.cluster_dbscan()
+		self.show_plot()
+		self.fig.canvas.draw_idle()
+
+
+	def show_plot(self, db, X):
+
 		core_samples_mask = zeros_like(db.labels_, dtype=bool)
 		core_samples_mask[db.core_sample_indices_] = True
 		labels = db.labels_
@@ -198,10 +211,11 @@ class Storm(object):
 		axfreq = plt.axes([0.2, 0.0, 0.65, 0.03], axisbg=axcolor)
 		axamp  = plt.axes([0.2, 0.05, 0.65, 0.03], axisbg=axcolor)
 
-		a0 = 24
-		f0 = 0.5
-		sfreq = Slider(axfreq, 'Max distance to neighbor', 0.0, 1.0, valinit=f0)
-		samp = Slider(axamp, 'Minimum Cluster Size', 1, 60, valinit=a0)
+		self.sfreq = Slider(axfreq, 'Max distance to neighbor', 0.0, 1.0, valinit=0.5)
+		self.samp = Slider(axamp, 'Minimum Cluster Size', 1, 60, valinit=24, valfmt='%0.0f')
+
+		self.sfreq.on_changed(self.__update_plot)
+		self.samp.on_changed(self.__update_plot)
 
 		plt.show()
 
@@ -228,7 +242,8 @@ if '__main__' == __name__:
 
 	options, args = parser.parse_args()
 	storm = Storm(options.storm_file, options.cluster_distance, options.min_sample)
-	clusters = storm.cluster_dbscan()
+	clusters, db, X = storm.cluster_dbscan()
+	storm.show_plot(db,X)
 	print clusters
 	#First iteration
 	#cluster_dict = storm.cluster(storm.frame_xy, options.cluster_distance)
