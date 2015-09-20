@@ -15,8 +15,6 @@ from numpy import arange
 from numpy.linalg import norm
 from numpy import zeros_like
 from numpy import linspace
-#BioPython import
-from Bio.KDTree import KDTree
 #Birch 
 from sklearn.cluster import Birch
 from sklearn.cluster import MiniBatchKMeans
@@ -42,9 +40,11 @@ class Storm(object):
 		self.ns = None
 		self.sfreq = None
 		self.samp = None
-		self.fig, self.ax = plt.subplots()
-		plt.subplots_adjust(left=0.25, bottom=0.25)
-
+		self.fig, self.ax = plt.subplots(3)
+		#plt.subplots_adjust(left=0.25, bottom=0.25)
+		self.X = None
+		self.db = None
+		self.plot_handle = []
 		#self.__read_data_birch()
 		self.__read_synthetic_data()
 
@@ -101,13 +101,14 @@ class Storm(object):
 		return clusters
 
 	def cluster_dbscan(self):
-		print "Starting DBSCAN"
+		print "Starting DBSCAN", self.cluster_distance, self.min_sample
 		#db.fit(self.all_frames_xy)
-		X = StandardScaler().fit_transform(self.all_frames_xy)
-		db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample).fit(X)
-		clusters = db.fit_predict(X)
-
-		return clusters, db, X
+		self.X = StandardScaler().fit_transform(self.all_frames_xy)
+		self.db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample).fit(self.X)
+		clusters = self.db.fit_predict(self.X)
+		labels = self.db.labels_
+		n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+		return clusters
 
 
 	def save_to_pdb_birch(self, pdb_name, clusters):
@@ -177,20 +178,21 @@ class Storm(object):
 		out_file.close()
 		out_file_cmd.close()
 
-	def __update_plot(self, val):
-		self.cluster_distance = round(self.samp.val)
-		self.min_sample = self.sfreq.val
+	def update_plot(self, val):
+		self.cluster_distance = round(self.sfreq.val,2)
+		self.min_sample = round(self.samp.val)
 		self.cluster_dbscan()
 		self.show_plot()
 		self.fig.canvas.draw_idle()
 
-
-	def show_plot(self, db, X):
-
-		core_samples_mask = zeros_like(db.labels_, dtype=bool)
-		core_samples_mask[db.core_sample_indices_] = True
-		labels = db.labels_
+	def show_plot(self):
+		self.ax[0].clear()
+		self.ax[0].set_position([0.1,0.1,0.8,0.8])
+		core_samples_mask = zeros_like(self.db.labels_, dtype=bool)
+		core_samples_mask[self.db.core_sample_indices_] = True
+		labels = self.db.labels_
 		n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+		self.ax[0].set_title('Estimated number of clusters: %d' % n_clusters_)
 		# Black removed and is used for noise instead.
 		unique_labels = set(labels)
 		colors = plt.cm.Spectral(linspace(0, 1, len(unique_labels)))
@@ -199,25 +201,12 @@ class Storm(object):
 				col = 'k'
 
 			class_member_mask = (labels == k)
-			xy = X[class_member_mask & core_samples_mask]
-			plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,markeredgecolor='k', markersize=14)
+			xy = self.X[class_member_mask & core_samples_mask]
+			self.ax[0].plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,markeredgecolor='k', markersize=14)
 
-			xy = X[class_member_mask & ~core_samples_mask]
-			plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,markeredgecolor='k', markersize=6)
+			xy = self.X[class_member_mask & ~core_samples_mask]
+			self.ax[0].plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=col,markeredgecolor='k', markersize=6)
 
-		plt.title('Estimated number of clusters: %d' % n_clusters_)
-
-		axcolor = 'lightgoldenrodyellow'
-		axfreq = plt.axes([0.2, 0.0, 0.65, 0.03], axisbg=axcolor)
-		axamp  = plt.axes([0.2, 0.05, 0.65, 0.03], axisbg=axcolor)
-
-		self.sfreq = Slider(axfreq, 'Max distance to neighbor', 0.0, 1.0, valinit=0.5)
-		self.samp = Slider(axamp, 'Minimum Cluster Size', 1, 60, valinit=24, valfmt='%0.0f')
-
-		self.sfreq.on_changed(self.__update_plot)
-		self.samp.on_changed(self.__update_plot)
-
-		plt.show()
 
 if '__main__' == __name__:
 	doc = """
@@ -242,8 +231,22 @@ if '__main__' == __name__:
 
 	options, args = parser.parse_args()
 	storm = Storm(options.storm_file, options.cluster_distance, options.min_sample)
-	clusters, db, X = storm.cluster_dbscan()
-	storm.show_plot(db,X)
+	clusters = storm.cluster_dbscan()
+	storm.show_plot()
+	axcolor = 'lightgoldenrodyellow'
+	#storm.ax[1] = plt.axes([0.2, 0.0, 0.65, 0.03], axisbg=axcolor)
+	#storm.ax[2]  = plt.axes([0.2, 0.05, 0.65, 0.03], axisbg=axcolor)
+
+	storm.ax[1].set_position([0.2, 0.0, 0.65, 0.03])
+	storm.ax[2].set_position([0.2, 0.05, 0.65, 0.03])
+
+	storm.sfreq = Slider(storm.ax[1], 'Max distance to neighbor', 0.0, 1.0, valinit=0.2)
+	storm.samp = Slider(storm.ax[2], 'Minimum Cluster Size', 1, 60, valinit=24, valfmt='%0.0f')
+
+	storm.sfreq.on_changed(storm.update_plot)
+	storm.samp.on_changed(storm.update_plot)
+
+	plt.show()
 	print clusters
 	#First iteration
 	#cluster_dict = storm.cluster(storm.frame_xy, options.cluster_distance)
