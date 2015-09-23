@@ -11,8 +11,6 @@ import optparse
 import os
 #Numpy imports
 from numpy import array
-from numpy import arange
-from numpy.linalg import norm
 from numpy import zeros_like
 from numpy import linspace
 #Birch 
@@ -21,13 +19,14 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider, Button, RadioButtons
+from matplotlib.widgets import Slider, Button
 
 class Storm(object):
 	"""
 	Main function to generate helical symmetry
 	"""
 	def __init__(self, storm_file, cluster_distance, min_sample):
+		self.storm_filename = storm_file[:-4]
 		self.storm_file = open(storm_file)
 		self.cluster_distance = cluster_distance
 		self.min_sample = min_sample
@@ -40,7 +39,7 @@ class Storm(object):
 		self.ns = None
 		self.sfreq = None
 		self.samp = None
-		self.fig, self.ax = plt.subplots(3)
+		self.fig, self.ax = plt.subplots(4)
 		#plt.subplots_adjust(left=0.25, bottom=0.25)
 		self.X = None
 		self.db = None
@@ -105,14 +104,16 @@ class Storm(object):
 		#db.fit(self.all_frames_xy)
 		self.X = StandardScaler().fit_transform(self.all_frames_xy)
 		self.db = DBSCAN(eps=self.cluster_distance, min_samples=self.min_sample).fit(self.X)
-		clusters = self.db.fit_predict(self.X)
 		labels = self.db.labels_
-		n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-		return clusters
 
 
-	def save_to_pdb_birch(self, pdb_name, clusters):
-		#Sorting
+	def save_to_pdb_dbscan(self, event):
+		#Saving figure first
+		filname_base = self.storm_filename+"_"+str(self.cluster_distance)+"_"+str(self.min_sample)
+		self.fig.savefig(filname_base+'_full_figure.png', dpi=300)
+		extent = self.ax[0].get_window_extent().transformed(self.fig.dpi_scale_trans.inverted())
+		self.fig.savefig(filname_base+'_main_figure.png', bbox_inches=extent, dpi=300)
+		clusters = self.db.fit_predict(self.X)
 		cluster_dict = {}
 		point_no = 0
 		for cluster in clusters:
@@ -121,8 +122,8 @@ class Storm(object):
 			cluster_dict[cluster].append(self.all_frames_xy[point_no])
 			point_no+=1
 	
-		out_file = open(str(self.cluster_distance)+pdb_name,"w")
-		out_file_cmd = open(str(self.cluster_distance)+".cmd","w")
+		out_file = open(filname_base+".pdb","w")
+		out_file_cmd = open(filname_base+".cmd","w")
 		write_lines = []
 
 		out_file_cmd.write("set bg_color white\n")
@@ -221,23 +222,23 @@ if '__main__' == __name__:
 	parser.add_option("-f", "--file", dest="storm_file", default = None,
 					  type = 'string',
 					  help="STORM file in a csv format from ThunderSTORM [OBLIGATORY]")
-	parser.add_option("-d", "--distance", dest="cluster_distance", default =None,
+	parser.add_option("-d", "--distance", dest="cluster_distance", default=24,
 					  type = 'float',
 					  help="Clutering distance.  Default =  2sigma")
-	parser.add_option("-m", "--min", dest="min_sample", default =None,
+	parser.add_option("-m", "--min", dest="min_sample", default=0.2,
 			  type = 'int',
 			  help="Minimum sample size.  Default =  None")
 
-
 	options, args = parser.parse_args()
 	storm = Storm(options.storm_file, options.cluster_distance, options.min_sample)
+
 	clusters = storm.cluster_dbscan()
 	storm.show_plot()
 	axcolor = 'lightgoldenrodyellow'
 	#storm.ax[1] = plt.axes([0.2, 0.0, 0.65, 0.03], axisbg=axcolor)
 	#storm.ax[2]  = plt.axes([0.2, 0.05, 0.65, 0.03], axisbg=axcolor)
 
-	storm.ax[1].set_position([0.2, 0.0, 0.65, 0.03])
+	storm.ax[1].set_position([0.2, 0.01, 0.65, 0.03])
 	storm.ax[2].set_position([0.2, 0.05, 0.65, 0.03])
 
 	storm.sfreq = Slider(storm.ax[1], 'Max distance to neighbor', 0.0, 1.0, valinit=0.2)
@@ -246,10 +247,9 @@ if '__main__' == __name__:
 	storm.sfreq.on_changed(storm.update_plot)
 	storm.samp.on_changed(storm.update_plot)
 
+	storm.ax[3].set_position([0.9, 0.01, 0.1, 0.03])
+	button = Button(storm.ax[3], 'Save', color=axcolor, hovercolor='0.975')
+	button.on_clicked(storm.save_to_pdb_dbscan)
 	plt.show()
-	print clusters
-	#First iteration
-	#cluster_dict = storm.cluster(storm.frame_xy, options.cluster_distance)
-	storm.save_to_pdb_birch( "output.pdb", clusters)
 
 
