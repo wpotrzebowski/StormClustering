@@ -25,7 +25,7 @@ class Storm(object):
 	"""
 	Main function to generate helical symmetry
 	"""
-	def __init__(self, storm_file, cluster_distance, min_sample):
+	def __init__(self, storm_file, cluster_distance, min_sample, synthetic):
 		self.storm_filename = storm_file[:-4]
 		self.storm_file = open(storm_file)
 		self.cluster_distance = cluster_distance
@@ -44,8 +44,10 @@ class Storm(object):
 		self.X = None
 		self.db = None
 		self.plot_handle = []
-		#self.__read_data_birch()
-		self.__read_synthetic_data()
+		if synthetic:
+			self.__read_synthetic_data()
+		else:
+			self.__read_data_exp()
 
 	def __read_data(self):
 		id = 0
@@ -67,13 +69,12 @@ class Storm(object):
 				self.frame_xy[frame].append((x,y,id))
 			id+=1
 
-	def __read_data_birch(self):
+	def __read_data_exp(self):
 		for line in self.storm_file.readlines()[1:]:
 			csv_values = line.split(",")
-			frame = float(csv_values[0])
-			x = float(csv_values[1])
-			y = float(csv_values[2])
-			z = 0
+			frame = float(csv_values[1])
+			x = float(csv_values[2])
+			y = float(csv_values[3])
 			self.all_frames_xy.append([x,y])
 
 	def __read_synthetic_data(self):
@@ -226,11 +227,14 @@ if '__main__' == __name__:
 					  type = 'float',
 					  help="Clutering distance.  Default =  2sigma")
 	parser.add_option("-m", "--min", dest="min_sample", default=0.2,
-			  type = 'int',
-			  help="Minimum sample size.  Default =  None")
+			  		type = 'int',
+			  		help="Minimum sample size.  Default =  None")
+	parser.add_option("-s", "--synthetic", dest="synthetic",
+			  		action = 'store_true',
+			  		help="Synthetic data supplied.  Default =  False")
 
 	options, args = parser.parse_args()
-	storm = Storm(options.storm_file, options.cluster_distance, options.min_sample)
+	storm = Storm(options.storm_file, options.cluster_distance, options.min_sample, options.synthetic)
 
 	clusters = storm.cluster_dbscan()
 	storm.show_plot()
